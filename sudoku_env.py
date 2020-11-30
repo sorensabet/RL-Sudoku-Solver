@@ -171,7 +171,7 @@ class SudokuEnv(gym.Env):
 		if is_finished: 
 			return np.copy(self.grid), 10, True, None
 		if is_correct:
-			return np.copy(self.grid), 2, True, None
+			return np.copy(self.grid), 2, False, None
 		if is_legal: # If it is unfinished but legal 
 			return np.copy(self.grid), 1, False, None
 		else:
