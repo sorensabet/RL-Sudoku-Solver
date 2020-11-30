@@ -644,10 +644,7 @@ def process_starting_input(inp):
             the_grid.boxes[curr_cell.box-1].cells.append(curr_cell)
 
             #print('Appended cell %s to box %d!' % (str(curr_cell.cell_id), curr_cell.box))
-    return the_grid                
-
-
-
+    return the_grid          
 
 # Step 1. Read in puzzle, and fill in rows, grids, and cells. 
 def start_solver(input_grid, soln_grid):
@@ -683,26 +680,27 @@ def start_solver(input_grid, soln_grid):
     
     return could_solve, helper.check_solution_auto(game_grid.nmpy_grid.astype(int), soln_grid)
 
-puzzles = np.load('puzzles.npy')
-res_dict = []
-
-for i in range(0, len(puzzles)):
+if __name__ == "__main__":
+    puzzles = np.load('puzzles.npy')
+    res_dict = []
     
-    start = time.time()
-    did_sol, right_sol = start_solver(puzzles[i][0], puzzles[i][1])
-    end = time.time()
+    for i in range(0, len(puzzles)):
+        
+        start = time.time()
+        did_sol, right_sol = start_solver(puzzles[i][0], puzzles[i][1])
+        end = time.time()
+        
+        tm = end-start
+        
+        #res_dict.append({'num': i, 'soren_solved': did_sol, 'matched_solved': right_sol, 'time (s)': tm})
+        res_dict.append([1*did_sol, right_sol, tm])
     
-    tm = end-start
+        print('%d: Soren: %s, Correct: %s, Time: %0.5f' % (i, str(did_sol), str(right_sol), tm))
     
-    #res_dict.append({'num': i, 'soren_solved': did_sol, 'matched_solved': right_sol, 'time (s)': tm})
-    res_dict.append([1*did_sol, right_sol, tm])
-
-    print('%d: Soren: %s, Correct: %s, Time: %0.5f' % (i, str(did_sol), str(right_sol), tm))
-
-df = pd.DataFrame.from_records(res_dict)
-df.rename(columns={0: 'soren_solved', 1:'matched_soln', 2: 'time(s)'}, inplace=True)
-df.to_hdf('soren_solver_results.h5', key='soren')
-    
+    df = pd.DataFrame.from_records(res_dict)
+    df.rename(columns={0: 'soren_solved', 1:'matched_soln', 2: 'time(s)'}, inplace=True)
+    df.to_hdf('soren_solver_results.h5', key='soren')
+        
 # Step 1 - simple logic: For each cell in each row, check row, column and grid, and exclude possibilities. If only 1 left after all 3 checks, assign value, update, and show plot. 
 
 # Okay. Add code so that if there is only 1 element in each row, column, or box, it automatically solves it instead of going in order, then comes back to where it was. 
