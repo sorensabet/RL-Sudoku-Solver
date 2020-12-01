@@ -3,10 +3,12 @@ from gym import spaces
 import numpy as np
 import sys
 from termcolor import colored, cprint
+import soren_solver
 
 error = 2
 resolved = 0
 unfinished = 1
+num_let_map = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
 # Check a solution is correct by checking the 3 contraints on all digits
 #   - digit is unique in row
@@ -29,11 +31,11 @@ def check_legal_action(val, row, col, array):
     # print('Val: %s' %str(val))
     
     if (val in array[row]):
-        print('Value exists in row!')
+        #print('Value exists in row!')
         return False 
     
     if (val in array[:,col]):
-        print('Value exists in column!')
+        #print('Value exists in column!')
         return False 
     
     # To check subgrid, I first need to find the correct subgrid
@@ -41,7 +43,7 @@ def check_legal_action(val, row, col, array):
     col_cor = 3*int(col/3)
     
     if (val in array[row_cor:row_cor + 3, col_cor:col_cor + 3]):
-        print('Value exists in subgrid!')
+        #print('Value exists in subgrid!')
         return False 
     
     return True 
@@ -139,25 +141,35 @@ class SudokuEnv(gym.Env):
 	#               - positive if action is correct or grid is resolved
 	def step(self, action):
         
+		#print('\n\n\n\n\nAction: [%s,%d] ==> %d' % (num_let_map[action[0]-1], action[1], action[2]))
+
+        
         # Action is sampled based on the function in __init__. 
 		self.last_action = action
 		oldGrid = np.copy(self.grid)
         
+        # Okay. I'm making a gut decision and constraining the environment so that the action can't overwrite an existing value
 		# The user can't replace a value that was already set
-		if self.grid[action[0], action[1]] != 0:
+        # Maybe we should constrain the algorthm so that it can't predict existing values? 
+        # Just resample from the action space if it predicts an existing value
+		if self.grid[action[0]-1, action[1]-1] != 0:
             # Setting reward to -10 to more strongly penalize 
             # the algorithm when it tries to overwrite existing values
-			print('Tried to overwrite existing value! Reward: %d' % (-10))
-			return np.copy(self.grid), -10, False, None
+			#print('Tried to overwrite existing value! Reward: %d' % (-2))
+			return np.copy(self.grid), -1, False, None
 
 
         # legal_reward: 1,   correct_reward:  2,    finished_reward:    10
-		is_legal = check_legal_action(action[2]+1, action[0], action[1], self.grid)
-		is_correct = self.sol[action[0], action[1]] == (action[2] + 1)
+		is_legal = check_legal_action(action[2], action[0]-1, action[1]-1, self.grid)
+		#is_solvable, _ = soren_solver.start_solver(self.grid, self.sol)
+		is_correct = self.sol[action[0]-1, action[1]-1] == (action[2])
 		is_finished = check_solution_manual(self.grid)       
-
-		# We add one to the action because the action space is from 0-8 and we want a value in 1-9
-		self.grid[action[0], action[1]] = action[2]+1
+        
+# 		print('Is legal: %s' % str(is_legal))
+# 		print('Is correct: %s' % str(is_correct))
+# 		print('Is finished: %s' % str(is_finished))
+        
+		self.grid[action[0]-1, action[1]-1] = action[2]
 
     
         # is_legal: Check if the current move is legal given the state of the board
@@ -169,12 +181,13 @@ class SudokuEnv(gym.Env):
         # Reward functions based on correctness and legality
 		# If grid is complete or correct, return positive reward
 		if is_finished: 
-			return np.copy(self.grid), 10, True, None
+			return np.copy(self.grid), 100, True, None
 		if is_correct:
 			return np.copy(self.grid), 2, False, None
 		if is_legal: # If it is unfinished but legal 
 			return np.copy(self.grid), 1, False, None
 		else:
+			#print('Made illegal move! Resetting grid!')
 			# If move is wrong, return to old state, and return negative reward
 			self.grid = oldGrid
 			return np.copy(self.grid), -1, False, None
@@ -211,7 +224,6 @@ class SudokuEnv(gym.Env):
 		mid_row = '  ├─────────┼─────────┼─────────┤'
 		bot_row = '  └─────────┴─────────┴─────────┘'
 		
-		last_action = self.last_action
 		array = np.where(self.grid == 0, np.nan, self.grid)
 		num_to_let = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
