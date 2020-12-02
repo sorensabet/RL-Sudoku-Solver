@@ -4,6 +4,14 @@ import numpy as np
 import sys
 from termcolor import colored, cprint
 
+from gym.envs.registration import register
+
+register(
+    id='Sudoku-v0',
+    entry_point=__name__ + ':SudokuEnv',
+    reward_threshold = 40.0,
+)
+
 error = 2
 resolved = 0
 unfinished = 1

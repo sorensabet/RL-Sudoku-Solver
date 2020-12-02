@@ -105,7 +105,7 @@ def print_board(array):
 
 puzzles = np.load('puzzles.npy')
 
-for i in range(0,len(puzzles)):
+# for i in range(0,len(puzzles)):
     # print_board(puzzles[i][0])
     # print_board(puzzles[i][1])
     # print('\n\n\n')

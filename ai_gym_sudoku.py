@@ -2,7 +2,7 @@
 # import pandas as pd 
 import sys
 import gym
-import gym_sudoku
+import sudoku_env
 import numpy as np 
 import helper
 import soren_solver
@@ -16,6 +16,9 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from keras import backend as K
+
+np.set_printoptions(precision=2)
+DEBUG = False
 
 def mapping_to_target_range(x, target_min=0, target_max=9) :
     x02 = K.tanh(x) + 1 # x in range(0,2)
@@ -73,8 +76,8 @@ class DQNAgent:
         if np.random.rand() <= self.epsilon:
             row = random.randrange(9)
             col = random.randrange(9) 
-            val = random.randrange(9)   
-            #print('Random action')
+            val = random.randrange(9)
+            if DEBUG: print('DEBUG: Random action! %s' % str([row, col, val]))
             return row, col, val
         
         act_values = self.model.predict(np.array([state.reshape(-1)]))  
@@ -82,7 +85,7 @@ class DQNAgent:
         col = math.floor(act_values[0][1])
         val = math.floor(act_values[0][2])
         
-        #print('Agent Action! %s' % str(act_values))
+        if DEBUG: print('DEBUG: Agent Action! %s' % str([row, col, val]))
         return row, col, val
 
     def replay(self, batch_size):
@@ -157,7 +160,7 @@ for i in range(num_episodes):
         
     for t in range(200):
     
-        #env.render()
+        if DEBUG: env.render()
         
         # Decide action
         action = agent.act(state)
@@ -181,7 +184,8 @@ for i in range(num_episodes):
         agent.memorize(state, action, reward, next_state, done)
         state = next_state
         
-        #print(action)
+        # print(action)
+        if DEBUG: input("Pausing...")
         
         if done:
             agent.update_target_model()
