@@ -3,6 +3,7 @@ from gym import spaces
 import numpy as np
 import sys
 from termcolor import colored, cprint
+import math
 
 from gym.envs.registration import register
 
@@ -159,56 +160,58 @@ class SudokuEnv(gym.Env):
 		r_illegal_movement = -5
 		r_correct = 5
 		r_finish = 10
-		# r_first_move = 10
 		r_good_effort = -1
 
 		# r_movement should range from 2 -> -2 # https://www.desmos.com/calculator/kn9tpwdan5
 		a = 5; b = -0.5; k = 4
-		sigmoid = k / (1 + np.exp(a + b * self.agent_state[2]))
-		if DEBUG: print(self.agent_state[2], sigmoid)
+		sigmoid = k / (1 + np.exp(a + b * self.time_since))
+		if DEBUG: print(self.time_since, sigmoid)
 		r_movement = 2 - sigmoid
 
 		# decrement time value every step
-		self.agent_state[2] += 1
+		if action >= 9:
+			self.time_since += 1
 
 		if action == 9: # up
-			is_legal = self.agent_state[0] > 0
+			is_legal = self.position >= 9
 			if is_legal:
 				if DEBUG: print('action: %s moving up' % (action))
-				self.agent_state[0] -= 1
+				self.position -= 9
 				return self.state(), r_movement, False, None
 			else:
 				if DEBUG: print('action: %s illegal movement' % (action))
 				return self.state(), r_illegal_movement, False, None
 		if action == 10: # down
-			is_legal = self.agent_state[0] < 8
+			is_legal = self.position <= 71
 			if is_legal:
 				if DEBUG: print('action: %s moving down' % (action))
-				self.agent_state[0] += 1
+				self.position += 9
 				return self.state(), r_movement, False, None
 			else:
 				if DEBUG: print('action: %s illegal movement' % (action))
 				return self.state(), r_illegal_movement, False, None
 		if action == 11: # left
-			is_legal = self.agent_state[1] > 0
+			is_legal = self.position != 0 and self.position % 9 != 0
 			if is_legal:
 				if DEBUG: print('action: %s moving left' % (action))
-				self.agent_state[1] -= 1
+				self.position -= 1
 				return self.state(), r_movement, False, None
 			else:
 				if DEBUG: print('action: %s illegal movement' % (action))
 				return self.state(), r_illegal_movement, False, None
 		if action == 12: # right
-			is_legal = self.agent_state[1] < 8
+			is_legal = self.position != 80 and (self.position + 1) % 9 != 0
 			if is_legal:
 				if DEBUG: print('action: %s moving right' % (action))
-				self.agent_state[1] += 1
+				self.position += 1
 				return self.state(), r_movement, False, None
 			else:
 				if DEBUG: print('action: %s illegal movement' % (action))
 				return self.state(), r_illegal_movement, False, None
 
-		if self.grid[self.agent_state[0], self.agent_state[1]] != 0:
+		row = math.floor(self.position / 9)
+		col = self.position % 9
+		if self.grid[row, col] != 0:
 			# print('Tried to overwrite existing value! Reward: %d' % (-10))
 			if DEBUG: print('action: %s overwrite' % (action))
 			return self.state(), r_impossible, False, None
@@ -216,10 +219,10 @@ class SudokuEnv(gym.Env):
         
 
         # legal_reward: 1,   correct_reward:  2,    finished_reward:    10
-		is_correct = self.sol[self.agent_state[0], self.agent_state[1]] == (action + 1)
+		is_correct = self.sol[row, col] == (action + 1)
 		if is_correct:
 			# We add one to the action because the action space is from 0-8 and we want a value in 1-9
-			self.grid[self.agent_state[0], self.agent_state[1]] = action+1
+			self.grid[row, col] = action+1
 
 			is_finished = check_solution_manual(self.grid)
 			if is_finished:
@@ -227,9 +230,9 @@ class SudokuEnv(gym.Env):
 				return self.state(), r_finish, True, None
 			else:
 				if DEBUG: print('action: %s correct' % (action))
-				self.agent_state[2] = 0 # reset after correct move
+				self.time_since = 0 # reset after correct move
 				return self.state(), r_correct, False, None
-		is_legal = check_legal_action(action+1, self.agent_state[0], self.agent_state[1], self.grid)
+		is_legal = check_legal_action(action+1, row, col, self.grid)
 		if is_legal:
 			# print('Tried to write the wrong value! Reward: %d' % (0))
 			if DEBUG: print('action: %s wrong value' % (action))
@@ -278,12 +281,17 @@ class SudokuEnv(gym.Env):
 	def reset(self):
 		self.last_action = None
 		self.grid = np.copy(self.base)
-		self.agent_state = np.array([4,4,0]) # row, col, steps since last number
+		# self.agent_state = np.array([4,4,0]) # row, col, steps since last number
+		self.position = 41
+		self.time_since = 0
 		return self.state()
 		
 
 	def state(self):
-		return np.concatenate((np.copy(self.grid).reshape(-1), np.copy(self.agent_state)))
+		pos = np.zeros(82)
+		pos[self.position] = 1
+		pos[81] = self.time_since
+		return np.concatenate((np.copy(self.grid).reshape(-1), pos))
 
 	def render(self, mode='human', close=False):
 		### This basically just prints out the game board, and is supposed to highlight 
@@ -303,6 +311,9 @@ class SudokuEnv(gym.Env):
 		print(coords)
 		print(top_row)
 
+		row = math.floor(self.position / 9)
+		col = self.position % 9
+
 		for i in range(0,9):
 			row_string = '%s |' % num_to_let[i]
 			for j in range(0,9):                        
@@ -312,7 +323,7 @@ class SudokuEnv(gym.Env):
 				else:
 					cell_val = int(cell_val)
 
-				if i == self.agent_state[0] and j == self.agent_state[1]:
+				if i == row and j == col:
 					row_string += '[' + str(cell_val) + ']' 
 				else:
 					row_string += ' ' + str(cell_val) + ' ' 

@@ -19,7 +19,7 @@ from keras import backend as K
 
 np.set_printoptions(precision=2)
 DEBUG = False
-TEST = True
+TEST = False
 
 def mapping_to_target_range(x, target_min=0, target_max=9) :
     x02 = K.tanh(x) + 1 # x in range(0,2)
@@ -35,9 +35,9 @@ class DQNAgent:
         self.memory = deque(maxlen=2000)
         self.good_memory = deque(maxlen=2000)
         self.gamma = 0.95    # discount rate
-        self.epsilon = 0.90  # exploration rate
+        self.epsilon = 1  # exploration rate
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.99
+        self.epsilon_decay = 0.999
         self.learning_rate = 0.001
         self.model = self._build_model()
         self.target_model = self._build_model()
@@ -72,9 +72,9 @@ class DQNAgent:
         self.target_model.set_weights(self.model.get_weights())
 
     def memorize(self, state, action, reward, next_state, done):
-        # if reward > 0:
-        #     self.good_memory.append((state, action, reward, next_state, done))
-        # else:
+        if reward > 0:
+            self.good_memory.append((state, action, reward, next_state, done))
+        else:
             self.memory.append((state, action, reward, next_state, done))
 
     def act(self, state):
@@ -119,10 +119,10 @@ class DQNAgent:
 
     def replay(self, batch_size):
         minibatch = random.sample(self.memory, int(batch_size / 2))
-        # good_minibatch = random.sample(self.good_memory, min(int(batch_size / 2), len(self.good_memory)))
+        good_minibatch = random.sample(self.good_memory, min(int(batch_size / 2), len(self.good_memory)))
         x = []
         y = []
-        for state, action, reward, next_state, done in minibatch:# + good_minibatch:
+        for state, action, reward, next_state, done in minibatch + good_minibatch:
             qsa_state = self.model.predict(tf.constant([state]))[0]
             qsa_next_state = self.model.predict(tf.constant([next_state]))[0]
 
@@ -140,7 +140,8 @@ class DQNAgent:
             y.append(target)
 
         # print(len(good_minibatch))
-        # print(len(x))
+        # print(x)
+        # print(y)
 
         with tf.device('/gpu:0'):
             self.model.fit(tf.constant(x), tf.constant(y), epochs=1, verbose=0)
@@ -170,7 +171,7 @@ env = gym.make('Sudoku-v0')
 env.base = puzzles[0][0] # Unfinished puzzle
 env.sol = puzzles[0][1]  # Solution (used to inform reward function)
 
-state_size = 81 + 3
+state_size = 81 + 81 + 1
 action_size = 9 + 4
 agent = DQNAgent(state_size, action_size)
 done=False
@@ -189,14 +190,17 @@ try:
 except Exception as e:
     print(e)
 
+is_done = True
 for i in range(num_episodes):
 
-    puz = random.randrange(len(puzzles))
-    env.base = puzzles[puz][0] # Unfinished puzzle
-    env.sol = puzzles[puz][1]  # Solution (used to inform reward function)
+    if is_done:
+        puz = random.randrange(len(puzzles))
+        env.base = puzzles[puz][0] # Unfinished puzzle
+        env.sol = puzzles[puz][1]  # Solution (used to inform reward function)
+        state = env.reset()
+        is_done = False
+        score = 0
     
-    state = env.reset()
-    score = 0
     # if i % 20 == 0:
     #     DEBUG = not DEBUG
     #     sudoku_env.setDebug(DEBUG)
@@ -233,7 +237,8 @@ for i in range(num_episodes):
         
         if done:
             agent.update_target_model()
-            print("episode: {}/{}, score: {}, e: {:.2}".format(i, num_episodes, t, agent.epsilon))
+            print("episode: {}/{}, score: {}, e: {:.2}".format(i, num_episodes, score, agent.epsilon))
+            is_done = True
             break
 
     if (best_score is None):
