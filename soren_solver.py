@@ -646,6 +646,17 @@ def process_starting_input(inp):
             #print('Appended cell %s to box %d!' % (str(curr_cell.cell_id), curr_cell.box))
     return the_grid          
 
+def check_legal_moves_remaining(input_grid):
+    """
+    Checks if a deterministic solver can find at least 1 legal move remaining on the board
+    returns True if one legal move exists
+    returns False otherwise
+
+    """
+    game_grid = process_starting_input(np.where(input_grid==0, np.nan, input_grid))
+    game_grid.iterate()
+    return game_grid.changed_during_iteration
+    
 # Step 1. Read in puzzle, and fill in rows, grids, and cells. 
 def start_solver(input_grid, soln_grid):
     
