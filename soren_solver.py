@@ -711,7 +711,7 @@ if __name__ == "__main__":
     df = pd.DataFrame.from_records(res_dict)
     df.rename(columns={0: 'soren_solved', 1:'matched_soln', 2: 'time(s)'}, inplace=True)
     df.to_hdf('soren_solver_results.h5', key='soren')
-        
+#       
 # Step 1 - simple logic: For each cell in each row, check row, column and grid, and exclude possibilities. If only 1 left after all 3 checks, assign value, update, and show plot. 
 
 # Okay. Add code so that if there is only 1 element in each row, column, or box, it automatically solves it instead of going in order, then comes back to where it was. 
