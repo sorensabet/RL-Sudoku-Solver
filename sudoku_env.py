@@ -1,8 +1,22 @@
 import gym
 from gym import spaces
 import numpy as np
-import sys
-from termcolor import colored, cprint
+import math
+import os 
+import helper
+
+from gym.envs.registration import register
+
+DEBUG = False
+def setDebug(d):
+	global DEBUG
+	DEBUG = d
+
+register(
+    id='Sudoku-v0',
+    entry_point=__name__ + ':SudokuEnv',
+    reward_threshold = 40.0,
+)
 
 error = 2
 resolved = 0
@@ -17,102 +31,6 @@ unfinished = 1
 #   - unfinished if the grid is not yet finished
 #   - error if one of the contraints is not respected
 
-def check_legal_action(val, row, col, array): 
-    """
-        val: The next value predicted by the algorithm 
-        row: The row coordinate to input the val
-        col: The col coordinate to input the val 
-    """
-    
-    # print('Row: %s' %str(array[row]))
-    # print('Col: %s' %str(array[col]))
-    # print('Val: %s' %str(val))
-    
-    if (val in array[row]):
-        print('Value exists in row!')
-        return False 
-    
-    if (val in array[:,col]):
-        print('Value exists in column!')
-        return False 
-    
-    # To check subgrid, I first need to find the correct subgrid
-    row_cor = 3*int(row/3)
-    col_cor = 3*int(col/3)
-    
-    if (val in array[row_cor:row_cor + 3, col_cor:col_cor + 3]):
-        print('Value exists in subgrid!')
-        return False 
-    
-    return True 
-
-def check_solution_manual(array):
-    """
-    Parameters
-    ----------
-    array : (9,9) np.ndarray reprenting completed Sudoku grid
-
-    Returns True if the completed grid is a valid solution, false otherwise
-    -------
-    
-    """
-    
-    correct = np.array([1,2,3,4,5,6,7,8,9])
-        
-    # Check each row: 
-    for r in range(0,9):
-        if ((np.sort(array[r]) == correct).all() == False):
-            return False 
-    
-    for c in range(0,9):
-        if ((np.sort(array[:,c]) == correct).all() == False):
-            return False 
-        
-    corners = [(0,0), (0,3), (0,6), (3,0), (3,3), (3, 6), (6,0), (6,3), (6,6)]
-    for g in corners:
-        sub_grid = array[g[0]:g[0]+3,g[1]:g[1]+3]
-        
-        if ((np.sort(sub_grid.reshape(-1)) == correct).all() == False):
-            print(np.sort(sub_grid.reshape(-1)))
-            return False
-
-    return True 
-
-def checkSolution(grid):
-	N = len(grid)
-
-	for i in range(N):
-		for j in range(N):
-			# If a case is not filled, the sudoku is not finished
-			if grid[i][j] == 0:
-				return unfinished
-			
-			n = int(N/3)
-			
-			iOffset = int(i/n*n)
-			jOffset = int(j/n*n)
-			
-
-			square = grid[ iOffset:iOffset + n , jOffset:jOffset + n].flatten()
-			# Check uniqueness
-			uniqueInRow    = countItem(grid[i], grid[i, j])  == 1
-			uniqueInCol    = countItem(grid[:,j:j+1].flatten(), grid[i, j]) == 1
-			uniqueInSquare = countItem(square, grid[i, j]) == 1
-
-			if not (uniqueInRow and uniqueInCol and uniqueInSquare):
-				return error
-
-	return resolved
-
-
-# Count the number of time the item appears in a vector
-def countItem(vector, item):
-	count = 0
-	for item2 in vector:
-		if item2 == item: count += 1
-	return count
-
-
 class SudokuEnv(gym.Env):
 		
 	metadata = {'render.modes': ['human']}
@@ -122,83 +40,76 @@ class SudokuEnv(gym.Env):
 	# Make a random grid and store it in self.base
 	# self.base seems to be a numpy array
     
-	def __init__(self):
-		# box space is continuous. This don't apply to a sudoku grid, but there is no other choices
-		self.observation_space = spaces.Box(low=1, high=9, shape=(9, 9))
-				
-		# This likely generates an x coordinate, a y coordinate, and a number to put into the grid
-		self.action_space = spaces.Tuple((spaces.Discrete(9), spaces.Discrete(9), spaces.Discrete(9)))
-		
+	def __init__(self, verbose=False):
 		# Get a random solution for an empty grid
 		self.grid = []
-	
-    
-	# @return
-	#   - a copy of the grid to prevent alteration from the user
-	#   - a reward: - negative if action leads to an error
-	#               - positive if action is correct or grid is resolved
+		self.setDebug = False
+		self.verbose = verbose
+
+
 	def step(self, action):
-        
-        # Action is sampled based on the function in __init__. 
+		# Action is sampled based on the function in __init__. 
 		self.last_action = action
-		oldGrid = np.copy(self.grid)
+
+		old_row = self.agent_state[0]
+		old_col = self.agent_state[1]
+		zero_elems = helper.get_zero_elements(self.grid)
+		old_idx = zero_elems.index((old_row, old_col))
         
-		# The user can't replace a value that was already set
-		if self.grid[action[0], action[1]] != 0:
-            # Setting reward to -10 to more strongly penalize 
-            # the algorithm when it tries to overwrite existing values
-			print('Tried to overwrite existing value! Reward: %d' % (-10))
-			return np.copy(self.grid), -10, False, None
-
-
-        # legal_reward: 1,   correct_reward:  2,    finished_reward:    10
-		is_legal = check_legal_action(action[2]+1, action[0], action[1], self.grid)
-		is_correct = self.sol[action[0], action[1]] == (action[2] + 1)
-		is_finished = check_solution_manual(self.grid)       
-
-		# We add one to the action because the action space is from 0-8 and we want a value in 1-9
-		self.grid[action[0], action[1]] = action[2]+1
-
-    
-        # is_legal: Check if the current move is legal given the state of the board
-        # is_correct: Checks if the current move matches the solution of the puzzle
-        # is_finished: Checks if the puzzle is finished 
-        # We also need to check for the case where it fails to finish the puzzle
-        # because it made an illegal move somewhere
-		
-        # Reward functions based on correctness and legality
-		# If grid is complete or correct, return positive reward
-		if is_finished: 
-			return np.copy(self.grid), 10, True, None
-		if is_correct:
-			return np.copy(self.grid), 2, False, None
-		if is_legal: # If it is unfinished but legal 
-			return np.copy(self.grid), 1, False, None
-		else:
-			# If move is wrong, return to old state, and return negative reward
-			self.grid = oldGrid
-			return np.copy(self.grid), -1, False, None
         
-        # Original Reward Functions 
-		# stats = checkSolution(self.grid)
-		# If grid is complete or correct, return positive reward
-		#if stats == resolved: # If it is finished
-		#	return np.copy(self.grid), 1, True, None
-		#elif stats == unfinished: # If it is unfinished but legal 
-		#	return np.copy(self.grid), 1, False, None
-		#if stats == error:
-		#	# If move is wrong, return to old state, and return negative reward
-		#	self.grid = oldGrid
-		#	return np.copy(self.grid), -1, False, None
+        
+        # With this approach, the agent will never try to change a starting cell,
+        # because its movement is limited to empty cells
+		if action > 8: 
 
+			if action == 9: # Go left
+				new_idx = (zero_elems[old_idx-1]) if (old_idx > 0) else (zero_elems[-1])
+			else: # Go right
+				new_idx = (zero_elems[old_idx+1]) if (old_idx < len(zero_elems)-1) else (zero_elems[0])
+                
+			self.agent_state[0] = new_idx[0]
+			self.agent_state[1] = new_idx[1]
+            
+            # Return reward of -1 for moving, to discourage too much movement
+			return self.state(), -1, False, None
+		else: 
+			is_legal = helper.check_legal_action(action+1, old_row, old_col, self.grid)
+			if (is_legal):
+				self.grid[old_row, old_col] = action+1
+        
+            # check_legal_moves_remaining returns True if there are legal moves remaining
+			is_episode_done = not helper.check_legal_moves_remaining(self.grid)
+			#num_zeros = np.size(self.grid) - np.count_nonzero(self.grid)		
+            
+			if is_legal: 
+				if is_episode_done:
+					return self.state(), 1/self.num_empty, is_episode_done, None
+				else: 
+                    # Also need to move the current position to the next empty cell
+                    # Set default behaviour of moving right if cell is solved for now
+					new_idx = (zero_elems[old_idx+1]) if (old_idx < len(zero_elems)-1) else (zero_elems[0])
+                
+					self.agent_state[0] = new_idx[0]
+					self.agent_state[1] = new_idx[1]
+					return self.state(), 1/self.num_empty, is_episode_done, None
+
+			else:
+				return self.state(), -1, False, None
 
 	# Replace self.grid with self.base
 	# Creating a new grid at every reste would be expensive
 	def reset(self):
 		self.last_action = None
 		self.grid = np.copy(self.base)
-		return np.copy(self.grid)
+		self.num_empty = np.size(self.grid) - np.count_nonzero(self.grid)
+        # Randomly sample a starting point
+		start_pos = helper.get_rand_star_pos(self.grid)
+		self.agent_state = np.array([start_pos[0],start_pos[1]]) # row, col
+		return self.state()
+		
 
+	def state(self):
+		return np.concatenate((np.copy(self.grid).reshape(-1), np.copy(self.agent_state)))
 
 	def render(self, mode='human', close=False):
 		### This basically just prints out the game board, and is supposed to highlight 
@@ -211,7 +122,7 @@ class SudokuEnv(gym.Env):
 		mid_row = '  ├─────────┼─────────┼─────────┤'
 		bot_row = '  └─────────┴─────────┴─────────┘'
 		
-		last_action = self.last_action
+		# last_action = self.last_action
 		array = np.where(self.grid == 0, np.nan, self.grid)
 		num_to_let = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
@@ -227,7 +138,10 @@ class SudokuEnv(gym.Env):
 				else:
 					cell_val = int(cell_val)
 
-				row_string += ' ' + str(cell_val) + ' ' 
+				if i == self.agent_state[0] and j == self.agent_state[1]:
+					row_string += '[' + str(cell_val) + ']' 
+				else:
+					row_string += ' ' + str(cell_val) + ' ' 
 				if (j == 2 or j == 5 or j == 8):
 					row_string += '|'
 			print(row_string)
