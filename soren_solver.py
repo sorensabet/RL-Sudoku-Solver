@@ -656,6 +656,21 @@ def check_legal_moves_remaining(input_grid):
     game_grid = process_starting_input(np.where(input_grid==0, np.nan, input_grid))
     game_grid.iterate()
     return game_grid.changed_during_iteration
+
+def check_human_can_solve_cell(row, col, input_grid):
+    """
+        Given an input grid and a cell, checks if a human could solve the cell 
+        based on the current state of the board. 
+        
+        Returns: Whether the cell is solvable and the value of the cell
+    """
+    
+    input_grid = np.where(input_grid==0, np.nan, input_grid)
+    game_grid = process_starting_input(input_grid)
+    cell = game_grid.rows[row].cells[col]
+    game_grid.solve_cell(cell)
+    solved_cells = [gc.cell_id for gc in game_grid.solved_cells]
+    return cell.cell_id in solved_cells, cell.value
     
 # Step 1. Read in puzzle, and fill in rows, grids, and cells. 
 def start_solver(input_grid, soln_grid):
