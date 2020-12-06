@@ -7,11 +7,9 @@ import soren_solver
 import time
 import math
 import random
-import numpy as np
-import random
 import matplotlib.pyplot as plt
 import pandas as pd
-import my_pytorch_agents
+from my_pytorch_agents import DDQNAgent
 
 np.set_printoptions(precision=2)
 DEBUG = True
@@ -23,33 +21,65 @@ num_let_map = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 curr_puzz = puzzles[0][0]
 
 # Model parameters
-num_episodes = 500000
 batch_size=64
-
-# Initialize environment
-env = gym.make('Sudoku-v0')
-test_env = gym.make('Sudoku-v0') # Making a copy to not have to worry about overwriting puzzles during testing
-env.base = puzzles[0][0] # Unfinished puzzle
-env.sol = puzzles[0][1]  # Solution (used to inform reward function)
-env.setDebug = DEBUG
+best_score = -np.inf
+num_episodes = 800000
+load_checkpoint = False 
+chk_freq = 100             # Evaluate model performance and generate metrics after every 100th episode
 
 state_size = 81 + 2
 action_size = 9 + 2
-#agent = SudokuAgent(state_size, action_size)
-agent = my_pytorch_agents.Agent(lr=0.0001, input_dims=state_size, n_actions=action_size)
 
-is_done=True
+prms = {'algo': 'DDQNAgent', 'gamma': 0.99, 'epsilon': 1.0,
+          'lr': 0.0001, 'input_dims': state_size, 'n_actions': action_size,
+          'mem_size': 50000, 'eps_min': 0.1, 'batch_size': batch_size, 
+          'replace': 1000, 'eps_dec': 1e-7, 'bst_chkpt_dir': 'models/bst_chkpts/', 
+          'reg_chkpt_dir': 'models/reg_chkpts/',
+          'env_name': 'Sudoku_11acts_6rewards', 'right_guess': 0.1}
+
+agent = DDQNAgent(gamma=prms['gamma'], 
+                  epsilon=prms['epsilon'], 
+                  lr=prms['lr'], 
+                  input_dims=prms['input_dims'], 
+                  n_actions=prms['n_actions'], 
+                  mem_size= prms['mem_size'], 
+                  eps_min=prms['eps_min'], 
+                  batch_size=prms['batch_size'], 
+                  replace=prms['replace'], 
+                  eps_dec=prms['eps_dec'], 
+                  bst_chkpt_dir=prms['bst_chkpt_dir'], 
+                  reg_chkpt_dir=prms['reg_chkpt_dir'],
+                  algo=prms['algo'], 
+                  env_name=prms['env_name'], 
+                  right_guess=prms['right_guess'])
+
+with open('models/exp_design.txt', 'a') as file:
+    file.write(str(prms) + '\n')
+
+if load_checkpoint: 
+    agent.load_models()
+    
+filename = agent.algo + '_' + agent.env_name + '_lr' + str(agent.lr) + '_' +\
+    '_' + str(num_episodes) + 'games'
+figure_file = 'plots/' + filename + '.png'
+data_file = 'data/' + filename + '.png'
+    
+# Initialize environment
+env = gym.make('Sudoku-v0')
+env.base = puzzles[0][0] # Unfinished puzzle
+env.sol = puzzles[0][1]  # Solution (used to inform reward function)
+env.setDebug = DEBUG
 puzz_counter = 0
 
-# Metrics to track per episode
-enable_tests = False
-test_freq = 10      # Evaluate model performance on every n_th puzzle
-train_metrics = []
-test_metrics = []
+test_env = gym.make('Sudoku-v0')
 
-# For easier plotting
-scores = []
-eps_history = []
+# Metrics to track per episode
+enable_tests = True
+train_metrics, test_metrics = [], []
+scores, eps_history, steps_array = [], [], []
+
+
+is_done=True
 
 for e in range(num_episodes):
     #print('Current episode: %d ' % e)
@@ -73,42 +103,38 @@ for e in range(num_episodes):
     num_iters = 0
     
     while True:
-        # turn this on if you want to render
-        # env.render()
-        
-        # Decide action
-        
+      
         action = agent.act(state.reshape(1,-1))
+        
         # if DEBUG:
         #     print('Environment before action:')
         #     env.render()
-        #     print('Agent State: [%s,%d]' % (num_let_map[env.agent_state[0]], env.agent_state[1]+1))
-        #     print('Action: %s' % str(helper.act_desc(action)))
-
+        #     if (action == 9): # Move left 
+        #         print('ACTION: MOVE_LEFT  from [%s,%d]' % (num_let_map[env.agent_state[0]], env.agent_state[1]+1))
+        #     elif (action==10):
+        #         print('ACTION: MOVE_RIGHT from [%s,%d]' % (num_let_map[env.agent_state[0]], env.agent_state[1]+1))
+        #     else:
+        #         print('ACTION: [%s, %d] ==> %d' % (num_let_map[env.agent_state[0]], env.agent_state[1]+1, action+1)) 
+            
         # Advance the game to the next frame based on the action.
         next_state, reward, done, _ = env.step(action)
-        reward_for_ep += reward       
-
-        #act_row = num_let_map[action[0]]
-        #act_col = action[1] + 1 
-        #act_val = action[2] + 1
-        #print('Last action: [%s,%d] ==> %d, Reward: %d\n\n\n' % (act_row, act_col, act_val, reward))
+        reward_for_ep += reward
         
-        # memorize the previous state, action, reward, and done
-        #agent.memorize(state.reshape(1,-1), action, reward, next_state.reshape(1,-1), done)
+        if not load_checkpoint: 
+            agent.store_transition(state, action, reward, next_state, done)
+            agent.learn()
 
-        agent.learn(state, action, reward, next_state)
-
-        # make next_state the new current state for the next frame.
         state = next_state
         
         # if DEBUG:
-        #     print('\nEnvironment after previous action: ')
-        #     env.render()
-        #     print('Agent State: [%s,%d]' % (num_let_map[env.agent_state[0]], env.agent_state[1]+1))
-        #     print('State shape:  %s' % str(state.shape))
-        #     print('NState shape: %s' % str(next_state.shape))
-        
+        #     print('Reward: %0.2f\n\n' % reward)
+        #     # else:
+        #     #     print('Last action: Move to [%s, %d]' % (num_let_map[env.agent_state[0]], env.agent_state[1]+1))
+                
+        #     #print('Environment after previous action: ')
+        #     #env.render()
+        #     print('Agent Position: [%s,%d]' % (num_let_map[env.agent_state[0]], env.agent_state[1]+1))
+        #     #input('Batman')
         
         # Check if the puzzle was completed
         curr_puzz = state[:81].reshape(9,9)
@@ -122,14 +148,7 @@ for e in range(num_episodes):
         #input('Press enter to continue\n\n ------ END OF TIMESTEP -------\n\n')
 
         
-        if done:
-            # print the score and break out of the loop
-            if is_solved:
-                print('Solved puzzle #: %d' % (puzz_counter-1))
-            else:
-                print('No legal moves remaining for puzzle # %d' % (puzz_counter-1))
-            #env.render()
-            
+        if done:          
             print("\nFinished episode: {}/{}".format(e, num_episodes))
             is_done = True
             break
@@ -142,86 +161,97 @@ for e in range(num_episodes):
     # else:
     #     agent.replay(num_iters-1)
     
-    scores.append(reward)
+    scores.append(reward_for_ep)
     eps_history.append(agent.epsilon)
+    steps_array.append(num_iters)
     
-    if (e % 100 == 0):
-        avg_score = np.mean(scores[-100:])
-        print('epsiode %d score %0.1f avg score %0.1f epsilon %0.2f' % (e, reward_for_ep, avg_score, agent.epsilon))
+    avg_score = np.mean(scores[-100:])
+    ep_info = 'Epsiode: %d, score: %0.3f, avg score (last 100 episodes): %0.3f, epsilon: %0.3f, steps: %d' % (e, reward_for_ep, avg_score, agent.epsilon, num_iters)
+    print(ep_info)
     
-    filename = 'sudoku_avg_score.png'
-    helper.plot_learning_curve(scores, eps_history, filename)
     
+    # Okay. My goal is to test if I can save the models properly. 
+    # Both the custom saving (every nth iteration)
+    # And automatic saving (save when it gets a new highscore)
     
     # Metrics tracking 
-    # train_metrics.append({'episode': e, 'reward': reward_for_ep, 'num_iters': num_iters,
-    #                 'avg_reward': reward_for_ep/(num_iters), 'epsilon': agent.epsilon, 
-    #                  'solved': is_solved, 'puzzle_num': puzz_counter-1})
-        
-    # TESTING CURRENT MODEL: 
-    # Choose a puzzle randomly that was not seen up to now 
+    train_metrics.append({'episode': e, 'reward': reward_for_ep, 'num_iters': num_iters,
+                    'avg_reward': reward_for_ep/(num_iters), 'epsilon': agent.epsilon, 
+                      'puzzle_num': puzz_counter-1})
+    
+    
 
-    # if ((enable_tests is True) and (((e+1) % test_freq)==0)):
-    #     test_puzz = np.random.randint(puzz_counter, 1000000) # Test randomly on a puzzle we haven't seen yet
-    #     test_env.base = puzzles[test_puzz][0] # Unfinished puzzle
-    #     test_env.sol = puzzles[test_puzz][1]  # Solution (used to inform reward function)
+    # Step 1. Saving best model
+    if (avg_score > best_score):
+        if not load_checkpoint: 
+            agent.save_models_best()
+        best_score = avg_score
+        with open('models/bst_chkpts/info.txt', 'a') as file:
+            file.write(ep_info + ' best score: ' + str(best_score) + '\n')
+            
+            
+    # Step 2: Regularly saving checkpoints and testing best model
+    if (e % chk_freq == 0):
+        pd.DataFrame(train_metrics).to_csv('data/train_metrics.csv', index=None)
+        helper.plot_learning_curve(scores, eps_history, figure_file)
+        agent.save_models_regular()
+        with open('models/reg_chkpts/info.txt', 'a') as file:
+            file.write(ep_info + '\n')
+            
+            
+        # TESTING CURRENT MODEL: 
+        # Choose a puzzle randomly that was not seen up to now 
 
-    #     state = test_env.reset()
-    #     test_reward_for_ep = 0
-    #     test_solved = False
-        
-    #     last_guess = None 
-    #     last_guess_repeated_count = 0
-    #     got_stuck = False
-        
-    #     test_num_iters = 0
-    #     while True:
-    #         action = agent.act(state.reshape(1,-1)) # Use a different action function that acts using model
+        if (enable_tests == True):
+            print('Testing using only the model!')
             
-    #         if (last_guess == action):
-    #             last_guess_repeated_count += 1
-    #         else: 
-    #             last_guess = action 
-    #             last_guess_repeated_count = 0
+            test_puzz = np.random.randint(puzz_counter, 1000000) # Test randomly on a puzzle we haven't seen yet
+            test_env.base = puzzles[test_puzz][0] # Unfinished puzzle
+            test_env.sol = puzzles[test_puzz][1]  # Solution (used to inform reward function)
+    
+            state = test_env.reset()
+            test_reward_for_ep = 0
             
-    #         if (last_guess_repeated_count > 50):
-    #             got_stuck = True
-    #             break
+            last_guess = None 
+            last_guess_repeated_count = 0
+            got_stuck = False
             
-            
-    #         next_state, reward, done, _ = test_env.step(action)
-    #         test_reward_for_ep += reward
-            
-    #         state = next_state
-    #         is_solved = np.array_equal(test_env.sol, state)
-            
-    #         test_num_iters += 1
-    #         if ((done is True) or (test_num_iters > 1000)):
-    #             if ((done is True) and (is_solved is True)):
-    #                 print('Model solved puzzle #: %d' % (test_puzz))            
-    #             elif ((done is True) and (is_solved is False)):
-    #                 print('Model ran out of legal moves on puzzle #: %d' % (test_puzz))
-    #             elif (done is False):
-    #                 print('Model failed to solve puzzle %d in <5k steps!' % (test_puzz))
-                    
-    #             break
+            test_num_iters = 0
+            while True:
+                action = agent.test_act(state.reshape(1,-1)) # Use a different action function that acts using model
                 
-    #     if (got_stuck is False):    
-    #         test_metrics.append({'num_train_episodes': e, 'reward': test_reward_for_ep,
-    #                           'num_iters': test_num_iters, 'avg_reward': test_reward_for_ep/(test_num_iters+1),
-    #                           'solved': test_solved, 'puzzle_num': test_puzz})
-        
-    # print("finished ep {:d} with average reward {:f}, epsilon={:f}".format(e,reward_for_ep/(num_iters+1), agent.epsilon))
+                #print('Test iter: %d, action: %d' % (test_num_iters, action))
     
+                if (last_guess == action):
+                    last_guess_repeated_count += 1
+                else: 
+                    last_guess = action 
+                    last_guess_repeated_count = 0
+                
+                if (last_guess_repeated_count > 10):
+                    print('Model got in an infinite loop! Breaking!')
+                    got_stuck = True
+                    break
+                
+                
+                next_state, reward, done, _ = test_env.step(action)
+                test_reward_for_ep += reward
+                
+                state = next_state
+                is_solved = np.array_equal(test_env.sol, state)
+                
+                test_num_iters += 1
+                if ((done is True) or (test_num_iters > 1000)):
+                    if ((done is True) and (is_solved is True)):
+                        print('Model solved puzzle #: %d' % (test_puzz))            
+                    elif (done is False):
+                        print('Model failed to solve puzzle %d in <1k steps!' % (test_puzz))
+                    break
+            
+            test_metrics.append({'num_train_episodes': e, 'reward': test_reward_for_ep,
+                                  'num_iters': test_num_iters, 'avg_reward': test_reward_for_ep/(test_num_iters+1),
+                                  'puzzle_num': test_puzz, 'got_stuck': got_stuck*1})
+            pd.DataFrame(test_metrics).to_csv('data/test_metrics.csv', index=None)
 
-    # train the agent with the experience of the episode
-    # if num_iters >= 63:
-    #     agent.replay(64)
-    # else:
-    #     agent.replay(num_iters-1)
-
-    # Metrics tracking 
-    # train_metrics.append({'episode': e, 'reward': reward_for_ep, 'num_iters': num_iters,
-    #                 'avg_reward': reward_for_ep/(num_iters), 'epsilon': agent.epsilon, 
-    #                  'solved': is_solved, 'puzzle_num': puzz_counter-1})
+    
         
