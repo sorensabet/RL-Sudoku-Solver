@@ -12,7 +12,7 @@ def plot_learning_curve(scores, epsilons, filename):
     ax2 = fig.add_subplot(111, label='2', frame_on=False)
     
     ax.plot(x, epsilons, color="C0")
-    ax.set_xlabel('Training Steps', color="C0")
+    ax.set_xlabel('Episodes', color="C0")
     ax.set_ylabel('Epsilon', color="C0")
     ax.tick_params(axis='x', colors="C0")
     ax.tick_params(axis='y', colors="C0")
@@ -28,8 +28,30 @@ def plot_learning_curve(scores, epsilons, filename):
     ax2.set_ylabel('Score', color="C1")
     ax2.yaxis.set_label_position('right')
     ax2.tick_params(axis='y', colors="C1")
-    plt.savefig(filename)
+    plt.savefig(filename, bbox_inches='tight')
     plt.close()
+    
+    # Also plot epsilon and avg reward over episodes individually
+    plt.figure()
+    plt.plot(x, epsilons, 'o')
+    plt.grid(True)
+    plt.xlabel('Episode')
+    plt.ylabel('Epsilon')
+    plt.title('Epsilon decay over episodes')
+    plt.savefig(filename + 'EpsilonOnly.png', bbox_inches='tight')
+    plt.xlim([0,1])
+    plt.close()
+    
+    # Avg reward by itself
+    plt.figure()
+    plt.plot(x, running_avg, 'o')
+    plt.grid(True)
+    plt.xlabel('Episode')
+    plt.ylabel('Avg reward')
+    plt.title('Avg reward over episodes')
+    plt.savefig(filename+'AvgRewardOnly.png', bbox_inches='tight')
+    plt.close()
+    
 
 def arr_index_to_action(index):
     """
