@@ -4,6 +4,7 @@ import numpy as np
 import math
 import os 
 import helper
+import soren_solver
 
 from gym.envs.registration import register
 
@@ -45,6 +46,7 @@ class SudokuEnv(gym.Env):
 		self.grid = []
 		self.setDebug = False
 		self.verbose = verbose
+		#print('Initializing SudokuEnv from inside my custom file!')
 
 
 	def step(self, action):
@@ -56,12 +58,32 @@ class SudokuEnv(gym.Env):
 		zero_elems = helper.get_zero_elements(self.grid)
 		old_idx = zero_elems.index((old_row, old_col))
         
+        # Checking if human could solve it 
+		is_human_solvable, human_value = soren_solver.check_human_can_solve_cell(old_row, old_col, self.grid)
+		# Check if human could solve cell 
+        # If human can solve the cell, moving is bad 
+        # If human can't solve the cell, moving is good 
+		# print('Human solvable: %s, Human_val: %s, True_val: %s' % (str(is_human_solvable),str(human_value),self.sol[old_row, old_col]))
+        
+        # New reward structure: 
+        # 1. Check if a human could solve the cell 
+        # 2. Check if the value being played is the correct move 
+        
+        #  POSITIVE REWARDS 
+        #    If play_value & is_right=True & is_human_solvable=False:  +6   (DONE)
+        #    If play_value & is_right=True & is_human_solvable=True:   +3   (DONE)
+        #    If movement   &                 is_human_solvable=False:  +3   (DONE)
+        
+        #  NEGATIVE REWARDS
+        #    If play_value & is_right=False & is_human_solvable=True:  -5   (DONE)
+        #    If play_value & is_right=False & is_human_solvable=False: -3   (DONE)
+        #    If movement   &                  is_human_solvable=True:  -5   (DONE)
         
         
-        # With this approach, the agent will never try to change a starting cell,
-        # because its movement is limited to empty cells
+        # Environment prevents agent from changing existing cells
+        
+        # MOVEMENT CASE 
 		if action > 8: 
-
 			if action == 9: # Go left
 				new_idx = (zero_elems[old_idx-1]) if (old_idx > 0) else (zero_elems[-1])
 			else: # Go right
@@ -70,31 +92,42 @@ class SudokuEnv(gym.Env):
 			self.agent_state[0] = new_idx[0]
 			self.agent_state[1] = new_idx[1]
             
-            # Return reward of -1 for moving, to discourage too much movement
-			return self.state(), -1, False, None
-		else: 
-			is_legal = helper.check_legal_action(action+1, old_row, old_col, self.grid)
-			if (is_legal):
-				self.grid[old_row, old_col] = action+1
+			if is_human_solvable: 
+			    return self.state(), -5, False, None
+			else:
+			    return self.state(), +3, False, None
         
-            # check_legal_moves_remaining returns True if there are legal moves remaining
-			is_episode_done = not helper.check_legal_moves_remaining(self.grid)
-			#num_zeros = np.size(self.grid) - np.count_nonzero(self.grid)		
-            
-			if is_legal: 
-				if is_episode_done:
-					return self.state(), 1/self.num_empty, is_episode_done, None
-				else: 
-                    # Also need to move the current position to the next empty cell
-                    # Set default behaviour of moving right if cell is solved for now
-					new_idx = (zero_elems[old_idx+1]) if (old_idx < len(zero_elems)-1) else (zero_elems[0])
+        # PLAYING VALUE CASE
+		else:
+            # IF MOVE IS CORRECT
+			if (self.sol[old_row, old_col] == action+1):    
+				self.grid[old_row, old_col] = action+1      # Add move to grid
                 
+				is_episode_done = helper.check_solution_auto(self.grid, self.sol) # Check if grid is complete
+                
+
+				#print(is_episode_done)
+				#print(is_episode_done == False)
+				#print(is_episode_done == False)
+                
+                # Update the position by moving right
+				if (is_episode_done == False):
+					#print('Episode not done, cell solved, moving right!')
+					new_idx = (zero_elems[old_idx+1]) if (old_idx < len(zero_elems)-1) else (zero_elems[0])        
 					self.agent_state[0] = new_idx[0]
 					self.agent_state[1] = new_idx[1]
-					return self.state(), 1/self.num_empty, is_episode_done, None
-
-			else:
-				return self.state(), -1, False, None
+                
+				if is_human_solvable == True:    # Human could solve and it guessed right:
+					return self.state(), +3, is_episode_done, None
+				else:                            # Human could not solve but it guessed right
+					return self.state(), +6, is_episode_done, None
+            
+            # IF MOVE IS INCORRECT
+			else: 
+				if is_human_solvable == True: 
+					return self.state(), -5, False, None 
+				else:                
+					return self.state(), -3, False, None
 
 	# Replace self.grid with self.base
 	# Creating a new grid at every reste would be expensive
