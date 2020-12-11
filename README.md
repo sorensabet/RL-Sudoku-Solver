@@ -1,11 +1,2 @@
 # RL-Sudoku-Solver
-Reinforcement Learning to Solve Sudoku
-
-REWARDS:
-
-ENVIRONMENT:
-
-ACTIONS: 
-
-MODEL: 
-
+Experimenting with a deeper neural network (Made no difference)
