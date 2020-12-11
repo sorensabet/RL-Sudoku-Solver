@@ -35,7 +35,8 @@ prms = {'algo': 'DDQNAgent', 'gamma': 0.99, 'epsilon': 1.0,
           'mem_size': 50000, 'eps_min': 0.1, 'batch_size': batch_size, 
           'replace': 1000, 'eps_dec': 1e-7, 'bst_chkpt_dir': 'models/bst_chkpts/', 
           'reg_chkpt_dir': 'models/reg_chkpts/',
-          'env_name': 'Sudoku_11acts_6rewards', 'right_guess': 0.1}
+          'env_name': 'Sudoku_11acts_6rewards', 'right_guess': 0.2,
+          'good_mem_frac': 0.25}
 
 agent = DDQNAgent(gamma=prms['gamma'], 
                   epsilon=prms['epsilon'], 
@@ -51,7 +52,8 @@ agent = DDQNAgent(gamma=prms['gamma'],
                   reg_chkpt_dir=prms['reg_chkpt_dir'],
                   algo=prms['algo'], 
                   env_name=prms['env_name'], 
-                  right_guess=prms['right_guess'])
+                  right_guess=prms['right_guess'],
+                  good_mem_frac=prms['good_mem_frac'])
 
 with open('models/exp_design.txt', 'a') as file:
     file.write(str(prms) + '\n')
