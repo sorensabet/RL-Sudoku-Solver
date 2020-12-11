@@ -54,9 +54,11 @@ class DeepQNetwork(nn.Module):
         self.reg_checkpoint_dir = reg_chkpt_dir
         self.reg_checkpoint_file = os.path.join(self.reg_checkpoint_dir, name)
          
-        self.fc1 = nn.Linear(input_dims, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, n_actions)
+        self.fc1 = nn.Linear(input_dims, 60)
+        self.fc2 = nn.Linear(60, 48)
+        self.fc3 = nn.Linear(48, 36)
+        self.fc4 = nn.Linear(36, 24)
+        self.fc5 = nn.Linear(24, n_actions)
         
         self.optimizer = optim.Adam(self.parameters(), lr=lr)
         self.loss = nn.MSELoss()
@@ -69,7 +71,9 @@ class DeepQNetwork(nn.Module):
         
         layer1 = F.relu(self.fc1(state))
         layer2 = F.relu(self.fc2(layer1))
-        actions = self.fc3(layer2)
+        layer3 = F.relu(self.fc3(layer2))
+        layer4 = F.relu(self.fc4(layer3))
+        actions = self.fc5(layer4)
         return actions 
     
     def save_checkpoint(self):
@@ -91,7 +95,7 @@ class DeepQNetwork(nn.Module):
 class DDQNAgent():
     def __init__(self, gamma, epsilon, lr, n_actions, input_dims, 
                  mem_size, batch_size, eps_min=0.01, eps_dec=5e-7, 
-                 replace=10000, algo=None, env_name=None, 
+                 replace=1000, algo=None, env_name=None, 
                  bst_chkpt_dir='models/bst_checkpts', 
                  reg_chkpt_dir='models/reg_chkpts',
                  right_guess=0.25):
