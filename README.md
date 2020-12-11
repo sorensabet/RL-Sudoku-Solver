@@ -1,11 +1,2 @@
 # RL-Sudoku-Solver
-Reinforcement Learning to Solve Sudoku
-
-REWARDS:
-
-ENVIRONMENT:
-
-ACTIONS: 
-
-MODEL: 
-
+Updated sampling to take customizable fraction of good experiences instead of uniform random sampling
