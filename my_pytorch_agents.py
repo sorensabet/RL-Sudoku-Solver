@@ -94,7 +94,7 @@ class DDQNAgent():
                  replace=10000, algo=None, env_name=None, 
                  bst_chkpt_dir='models/bst_checkpts', 
                  reg_chkpt_dir='models/reg_chkpts',
-                 right_guess=0.25):
+                 right_guess=0.25, good_mem_frac=0.25):
         
         self.gamma = gamma
         self.epsilon = epsilon
@@ -112,8 +112,10 @@ class DDQNAgent():
         self.learn_step_counter = 0
         self.batch_size = batch_size
         self.right_guess = right_guess # When making a random guess, the % of times it should use a deterministic solver
+        self.good_mem_frac=good_mem_frac
         
-        self.memory = ReplayBuffer(mem_size, input_dims, n_actions)
+        
+        self.memory = ReplayBuffer(mem_size, input_dims, n_actions, good_mem_frac)
         
         self.q_eval = DeepQNetwork(self.lr, self.n_actions,
                                    input_dims=self.input_dims,
@@ -184,8 +186,13 @@ class DDQNAgent():
         self.q_next.load_reg_checkpoint()
         
     def learn(self):
-        if self.memory.mem_cntr < self.batch_size:
+        
+        g_batch_size = int(np.floor(self.batch_size*self.good_mem_frac))
+        b_batch_size = self.batch_size - g_batch_size
+        
+        if ((self.memory.good_mem_cntr < g_batch_size) or (self.memory.bad_mem_cntr < b_batch_size)):
             return 
+        
         
         self.q_eval.optimizer.zero_grad()
         
@@ -211,38 +218,101 @@ class DDQNAgent():
         self.q_eval.optimizer.step()
         self.learn_step_counter += 1
         self.decrement_epsilon()
-  
+          
 
 class ReplayBuffer():
-    def __init__(self, max_size, input_shape, n_actions):
-        self.mem_size = max_size    # Maximum size of memory
-        self.mem_cntr = 0           # Position of last stored memory
-        self.state_memory = np.zeros((self.mem_size, input_shape),dtype=np.float32)
-        self.new_state_memory = np.zeros((self.mem_size, input_shape),dtype=np.float32)
-        self.action_memory = np.zeros(self.mem_size, dtype=np.int64)
-        self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
-        self.terminal_memory = np.zeros(self.mem_size, dtype=np.uint8)
+    def __init__(self, max_size, input_shape, n_actions, good_mem_frac):
+        # self.mem_size = max_size    # Maximum size of memory
+        # self.mem_cntr = 0           # Position of last stored memory
+        
+        # self.state_memory = np.zeros((self.mem_size, input_shape),dtype=np.float32)
+        # self.new_state_memory = np.zeros((self.mem_size, input_shape),dtype=np.float32)
+        # self.action_memory = np.zeros(self.mem_size, dtype=np.int64)
+        # self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
+        # self.terminal_memory = np.zeros(self.mem_size, dtype=np.uint8)
+        
+        
+        # I want to have two separate lists, one to store good memories and one to store bad memories
+        self.good_mem_frac = good_mem_frac
+        self.good_mem_size = int(np.floor(max_size*good_mem_frac))
+        self.good_mem_cntr = 0
+        
+        self.bad_mem_size = max_size - self.good_mem_size
+        self.bad_mem_cntr = 0
+        
+        
+        
+        # Good state memory
+        self.g_state_memory = np.zeros((self.good_mem_size, input_shape), dtype=np.float32)
+        self.g_new_state_memory = np.zeros((self.good_mem_size, input_shape), dtype=np.float32)
+        self.g_action_memory = np.zeros(self.good_mem_size, dtype=np.int64)
+        self.g_reward_memory = np.zeros(self.good_mem_size, dtype=np.float32)
+        self.g_terminal_memory = np.zeros(self.good_mem_size, dtype=np.uint8)
+        
+        # Bad state memory
+        self.b_state_memory = np.zeros((self.bad_mem_size, input_shape), dtype=np.float32)
+        self.b_new_state_memory = np.zeros((self.bad_mem_size, input_shape), dtype=np.float32)
+        self.b_action_memory = np.zeros(self.bad_mem_size, dtype=np.int64)
+        self.b_reward_memory = np.zeros(self.bad_mem_size, dtype=np.float32)
+        self.b_terminal_memory = np.zeros(self.bad_mem_size, dtype=np.uint8)
         
     def store_transition(self, state, action, reward, state_, done):
         # Store the memories in the position of the first unoccupied memory
-        index = self.mem_cntr % self.mem_size
-        self.state_memory[index] = state
-        self.action_memory[index] = action 
-        self.reward_memory[index] = reward
-        self.new_state_memory[index] = state_
-        self.terminal_memory[index] = done 
-        self.mem_cntr += 1
+        if (reward > 0): # Good memory
+            index = self.good_mem_cntr % self.good_mem_size
+            self.g_state_memory[index] = state
+            self.g_action_memory[index] = action 
+            self.g_reward_memory[index] = reward
+            self.g_new_state_memory[index] = state_
+            self.g_terminal_memory[index] = done 
+            self.good_mem_cntr += 1
+        else: # bad memory
+            index = self.bad_mem_cntr % self.bad_mem_size
+            self.b_state_memory[index] = state
+            self.b_action_memory[index] = action 
+            self.b_reward_memory[index] = reward
+            self.b_new_state_memory[index] = state_
+            self.b_terminal_memory[index] = done 
+            self.bad_mem_cntr += 1
     
     def sample_buffer(self, batch_size):
-        max_mem = min(self.mem_cntr, self.mem_size)
-        batch = np.random.choice(max_mem, batch_size, replace=False)
+        # max_mem = min(self.mem_cntr, self.mem_size)
+        # batch = np.random.choice(max_mem, batch_size, replace=False)
         
-        states = self.state_memory[batch]
-        actions = self.action_memory[batch]
-        rewards = self.reward_memory[batch]
-        states_ = self.new_state_memory[batch]
-        dones = self.terminal_memory[batch]
+        # states = self.state_memory[batch]
+        # actions = self.action_memory[batch]
+        # rewards = self.reward_memory[batch]
+        # states_ = self.new_state_memory[batch]
+        # dones = self.terminal_memory[batch]
+
+        # Okay. This one's going to be tricky, what should I do here?
+        g_batch_size = int(np.floor(batch_size*self.good_mem_frac))
+        b_batch_size = batch_size - g_batch_size
         
+        
+        # Get good to bad batches in a ratio of 1:3
+        g_max_mem = min(self.good_mem_cntr, self.good_mem_size)
+        gbatch = np.random.choice(g_max_mem, g_batch_size, replace=False)
+        
+        b_max_mem = min(self.bad_mem_cntr, self.bad_mem_size)
+        bbatch = np.random.choice(b_max_mem, b_batch_size, replace=False)
+        
+        # # Get the good and bad batches
+        # print(self.g_state_memory[gbatch])
+        # print(type(self.g_state_memory[gbatch]))
+        # print(self.g_state_memory[gbatch].shape)
+
+        # print('\n')
+        # print(self.b_state_memory[bbatch])
+        # print(type(self.b_state_memory[bbatch]))
+        # print(self.b_state_memory[bbatch].shape)
+
+        states = np.concatenate((self.g_state_memory[gbatch],self.b_state_memory[bbatch]))
+        actions = np.concatenate((self.g_action_memory[gbatch],self.b_action_memory[bbatch]))
+        rewards = np.concatenate((self.g_reward_memory[gbatch],self.b_reward_memory[bbatch]))
+        states_ = np.concatenate((self.g_new_state_memory[gbatch],self.b_new_state_memory[bbatch]))
+        dones = np.concatenate((self.g_terminal_memory[gbatch], self.b_terminal_memory[bbatch]))
+
         return states, actions, rewards, states_, dones 
            
        
