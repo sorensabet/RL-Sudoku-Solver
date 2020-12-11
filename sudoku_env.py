@@ -79,7 +79,6 @@ class SudokuEnv(gym.Env):
         #    If play_value & is_right=False & is_human_solvable=False: -3   (DONE)
         #    If movement   &                  is_human_solvable=True:  -5   (DONE)
         
-        
         # Environment prevents agent from changing existing cells
         
         # MOVEMENT CASE 
@@ -105,7 +104,6 @@ class SudokuEnv(gym.Env):
                 
 				is_episode_done = helper.check_solution_auto(self.grid, self.sol) # Check if grid is complete
                 
-
 				#print(is_episode_done)
 				#print(is_episode_done == False)
 				#print(is_episode_done == False)
