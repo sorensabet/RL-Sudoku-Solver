@@ -32,10 +32,10 @@ action_size = 9 + 2
 
 prms = {'algo': 'DDQNAgent', 'gamma': 0.99, 'epsilon': 1.0,
           'lr': 0.0001, 'input_dims': state_size, 'n_actions': action_size,
-          'mem_size': 50000, 'eps_min': 0.1, 'batch_size': batch_size, 
+          'mem_size': 50000, 'eps_min': 0.25, 'batch_size': batch_size, 
           'replace': 1000, 'eps_dec': 1e-7, 'bst_chkpt_dir': 'models/bst_chkpts/', 
           'reg_chkpt_dir': 'models/reg_chkpts/',
-          'env_name': 'Sudoku_11acts_6rewards', 'right_guess': 0.1}
+          'env_name': 'Sudoku_11acts_6rewards', 'right_guess': 0.5}
 
 agent = DDQNAgent(gamma=prms['gamma'], 
                   epsilon=prms['epsilon'], 
@@ -252,6 +252,3 @@ for e in range(num_episodes):
                                   'num_iters': test_num_iters, 'avg_reward': test_reward_for_ep/(test_num_iters+1),
                                   'puzzle_num': test_puzz, 'got_stuck': got_stuck*1})
             pd.DataFrame(test_metrics).to_csv('data/test_metrics.csv', index=None)
-
-    
-        
