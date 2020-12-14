@@ -14,6 +14,8 @@ import torch.nn.functional as F
 import helper
 import soren_solver
 
+import math
+
 # Function to give accurate action some percentage of the time when epsilon is high 
 def get_modified_random_action(state, right_guess_percent, action_space):
     """
@@ -25,8 +27,12 @@ def get_modified_random_action(state, right_guess_percent, action_space):
     if np.random.random() < right_guess_percent: 
         #print('Randomly selected action - DETERMINISTIC!')
         grid = np.array(state[0][:81]).reshape((9,9))
-        row = state[0][81]
-        col = state[0][82]
+        pos = 0
+        for i in range(81):
+            if state[0][81+i] == 1:
+                pos = i
+        row = math.floor(pos / 9)
+        col = pos % 9
         
         can_solve, val = soren_solver.check_human_can_solve_cell(row, col, grid)
         
@@ -168,20 +174,24 @@ class DDQNAgent():
             if self.epsilon > self.eps_min else self.eps_min
     
     def save_models_best(self):
-        self.q_eval.save_checkpoint()
-        self.q_next.save_checkpoint()
+        print("a")
+        # self.q_eval.save_checkpoint()
+        # self.q_next.save_checkpoint()
     
     def load_models_best(self):
-        self.q_eval.load_checkpoint()
-        self.q_next.load_checkpoint()
+        print("a")
+        # self.q_eval.load_checkpoint()
+        # self.q_next.load_checkpoint()
         
     def save_models_regular(self):
-        self.q_eval.save_reg_checkpoint()
-        self.q_next.save_reg_checkpoint()
+        print("a")
+        # self.q_eval.save_reg_checkpoint()
+        # self.q_next.save_reg_checkpoint()
         
     def load_models_regular(self):
-        self.q_eval.load_reg_checkpoint()
-        self.q_next.load_reg_checkpoint()
+        print("a")
+        # self.q_eval.load_reg_checkpoint()
+        # self.q_next.load_reg_checkpoint()
         
     def learn(self):
         if self.memory.mem_cntr < self.batch_size:

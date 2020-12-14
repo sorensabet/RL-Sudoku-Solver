@@ -6,17 +6,21 @@ from collections import deque
 TEST = False
 
 class SudokuAgent:
-    def __init__(self, state_size, action_size):
-        self.state_size = state_size
-        self.action_size = action_size
+    def __init__(self, gamma, epsilon, lr, n_actions, input_dims, algo=None, env_name=None, ):
+        self.state_size = input_dims
+        self.action_size = n_actions
         self.memory = deque(maxlen=5000)
         self.good_memory = deque(maxlen=2000)
-        self.gamma = 0.95    # discount rate
-        self.epsilon = 0.999  # exploration rate
+        self.gamma = gamma
+        self.epsilon = epsilon
         self.epsilon_min = 0.1
         self.epsilon_decay = 0.995
-        self.learning_rate = 0.005
+        self.learning_rate = lr
         self.model = self._build_model()
+
+        self.algo = algo
+        self.env_name = env_name
+        self.batch_size = batch_size
     
     def _build_model(self):
         # Neural Net for Deep-Q learning Model

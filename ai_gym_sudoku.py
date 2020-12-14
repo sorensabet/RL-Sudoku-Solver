@@ -1,6 +1,6 @@
 import sys
 import gym
-import sudoku_env
+
 import numpy as np 
 import helper
 import soren_solver
@@ -9,11 +9,15 @@ import math
 import random
 import matplotlib.pyplot as plt
 import pandas as pd
+
+# import sudoku_env
 from my_pytorch_agents import DDQNAgent
+# from my_keras_agents import SudokuAgent
+import agent_13actions_unsupervised
 
 np.set_printoptions(precision=2)
 DEBUG = True
-TEST = False
+TEST = True
 
 # Load data
 puzzles = np.load('puzzles.npy')
@@ -31,11 +35,11 @@ state_size = 81 + 2
 action_size = 9 + 2
 
 prms = {'algo': 'DDQNAgent', 'gamma': 0.99, 'epsilon': 1.0,
-          'lr': 0.0001, 'input_dims': state_size, 'n_actions': action_size,
+          'lr': 0.0001, 'input_dims': 81+81+1, 'n_actions': 9+4,
           'mem_size': 50000, 'eps_min': 0.1, 'batch_size': batch_size, 
           'replace': 1000, 'eps_dec': 1e-7, 'bst_chkpt_dir': 'models/bst_chkpts/', 
           'reg_chkpt_dir': 'models/reg_chkpts/',
-          'env_name': 'Sudoku_11acts_6rewards', 'right_guess': 0.1}
+          'env_name': 'Sudoku_13acts', 'right_guess': 0.1}
 
 agent = DDQNAgent(gamma=prms['gamma'], 
                   epsilon=prms['epsilon'], 
@@ -52,12 +56,28 @@ agent = DDQNAgent(gamma=prms['gamma'],
                   algo=prms['algo'], 
                   env_name=prms['env_name'], 
                   right_guess=prms['right_guess'])
+# agent = SudokuAgent(gamma=prms['gamma'], 
+#                     epsilon=prms['epsilon'], 
+#                     lr=prms['lr'], 
+#                     input_dims=prms['input_dims'], 
+#                     n_actions=prms['n_actions'], 
+#                     # mem_size= prms['mem_size'], 
+#                     # eps_min=prms['eps_min'], 
+#                     batch_size=prms['batch_size'], 
+#                     # replace=prms['replace'], 
+#                     # eps_dec=prms['eps_dec'], 
+#                     # bst_chkpt_dir=prms['bst_chkpt_dir'], 
+#                     # reg_chkpt_dir=prms['reg_chkpt_dir'],
+#                     algo=prms['algo'], 
+#                     env_name=prms['env_name'], 
+#                     # right_guess=prms['right_guess'])
+# )
 
-with open('models/exp_design.txt', 'a') as file:
-    file.write(str(prms) + '\n')
+# with open('models/exp_design.txt', 'a') as file:
+#     file.write(str(prms) + '\n')
 
-if load_checkpoint: 
-    agent.load_models()
+# if load_checkpoint: 
+#     agent.load_models()
     
 filename = agent.algo + '_' + agent.env_name + '_lr' + str(agent.lr) + '_' +\
     '_' + str(num_episodes) + 'games'
@@ -66,7 +86,7 @@ data_file = 'data/' + filename + '.png'
     
 # Initialize environment
 env = gym.make('Sudoku-v0')
-env.base = puzzles[0][0] # Unfinished puzzle
+env.base = puzzles[0][1] # Unfinished puzzle
 env.sol = puzzles[0][1]  # Solution (used to inform reward function)
 env.setDebug = DEBUG
 puzz_counter = 0
@@ -106,9 +126,9 @@ for e in range(num_episodes):
       
         action = agent.act(state.reshape(1,-1))
         
-        # if DEBUG:
-        #     print('Environment before action:')
-        #     env.render()
+        if DEBUG:
+            print('Environment before action:')
+            env.render()
         #     if (action == 9): # Move left 
         #         print('ACTION: MOVE_LEFT  from [%s,%d]' % (num_let_map[env.agent_state[0]], env.agent_state[1]+1))
         #     elif (action==10):
